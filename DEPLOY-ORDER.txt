@@ -1,8 +1,0 @@
-1. Firebase Console > Authentication > Users: copy your admin UID; delete unknown users.
-2. Firestore > Data: create collection "admins", document ID = that UID, field role = "admin".
-3. Firestore > Rules: paste firestore.rules > Publish (check in Rules Playground).
-4. Upload ALL files in this folder (index.html, boot.js, admin.js, firebase-app.js, kiosk-app.js, service-worker.js, app.css).
-   firebase.json / _headers / firestore.rules / security-tests are NOT website files (firebase.json + _headers are for the host).
-5. Log in once on the tablet. If something is blocked, the browser console names the blocked address (CSP).
-6. Console settings: disable sign-up, restrict API key by referrer, restrict Cloudinary preset (see the report).
-Rollback: keep your old files and old rules until step 5 works.

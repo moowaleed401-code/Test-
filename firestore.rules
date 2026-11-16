@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// Anwar Lebanon kiosk — Firestore security rules.
+//
+// Model:
+//   * Visitors (not signed in) can READ only documents with visible == true.
+//   * Writes are allowed ONLY for admins. An admin is a signed-in user who has a document
+//     at admins/{their-uid}. Only you can create it (from the Firebase console) — rules forbid
+//     every client write to /admins, so nobody can promote themselves.
+//   * Everything not listed below is denied by default.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ---- small validation helpers (server-side input validation) ----
+    function optStr(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
+    function optBool(d, k)     { return !(k in d) || d[k] is bool; }
+    function optNum(d, k)      { return !(k in d) || d[k] is number; }
+    function optList(d, k, max){ return !(k in d) || (d[k] is list && d[k].size() <= max); }
+    function optPrice(d, k)    { return !(k in d) || d[k] == null || d[k] is number || (d[k] is string && d[k].size() <= 20); }
+
+    function validCategory(d) {
+      return d.keys().size() <= 60
+        && optStr(d, 'name', 200) && optStr(d, 'emoji', 40) && optStr(d, 'tag', 200)
+        && optStr(d, 'displayType', 30)
+        && optStr(d, 'imageUrl', 2000) && optStr(d, 'bannerImageUrl', 2000) && optStr(d, 'menuImageUrl', 2000)
+        && optBool(d, 'visible') && optNum(d, 'displayOrder')
+        && optList(d, 'galleryImages', 500) && optList(d, 'sections', 50) && optList(d, 'offers', 300);
+    }
+
+    function validProduct(d) {
+      return d.keys().size() <= 60
+        && optStr(d, 'name', 200) && optStr(d, 'description', 2000)
+        && optStr(d, 'categoryId', 128) && optStr(d, 'sectionId', 128)
+        && optStr(d, 'imageUrl', 2000)
+        && optPrice(d, 'price')
+        && optBool(d, 'visible') && optNum(d, 'displayOrder')
+        && optList(d, 'sizes', 50) && optList(d, 'flavors', 100)
+        && optList(d, 'sizePrices', 50) && optList(d, 'manaeshTypes', 100);
+    }
+
+    function validOffer(d) {
+      return d.keys().size() <= 60
+        && optStr(d, 'titleAr', 300) && optStr(d, 'titleEn', 300)
+        && optStr(d, 'descriptionAr', 2000) && optStr(d, 'description', 2000)
+        && optStr(d, 'image', 2000) && optStr(d, 'imageUrl', 2000)
+        && optStr(d, 'ctaText', 100) && optStr(d, 'ctaAction', 2000)
+        && optBool(d, 'visible') && optNum(d, 'displayOrder');
+    }
+
+    // ---- who is an admin ----
+    match /admins/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;  // lets the app check "am I an admin?"
+      allow list, create, update, delete: if false;                  // only editable from the Firebase console
+    }
+
+    // ---- public content ----
+    match /categories/{id} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow create, update: if isAdmin() && validCategory(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow create, update: if isAdmin() && validProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /offers/{id} {
+      allow read: if resource.data.visible == true || isAdmin();
+      allow create, update: if isAdmin() && validOffer(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // hero + seo settings
+    match /siteSettings/{doc} {
+      allow read: if true;
+      allow create, update: if isAdmin() && request.resource.data.keys().size() <= 60;
+      allow delete: if isAdmin();
+    }
+
+    // anything else: denied (no wildcard match on purpose)
+  }
+}
